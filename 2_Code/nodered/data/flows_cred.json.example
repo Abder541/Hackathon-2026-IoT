@@ -1,0 +1,13 @@
+{
+    "mqtt-broker-config": {
+        "user": "iotuser",
+        "password": "CHANGEME_mot_de_passe_mqtt"
+    },
+    "influxdb-config": {
+        "token": "CHANGEME_token_influxdb"
+    },
+    "notif-em-out": {
+        "userid": "votre.email@gmail.com",
+        "password": "CHANGEME_app_password_gmail"
+    }
+}

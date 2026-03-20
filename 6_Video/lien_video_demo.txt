@@ -1,0 +1,16 @@
+# Lien Video de Demonstration
+# Hackathon IoT 2026 - Equipe 01
+# Plateforme IoT Supervision Industrielle
+#
+# Duree : 5-8 minutes
+# Contenu :
+#   1. Demarrage du systeme (docker compose up)
+#   2. Interface Node-RED (3 onglets)
+#   3. Dashboard Grafana (temps reel)
+#   4. Declenchement d'une alerte
+#   5. Verification dans InfluxDB
+#
+# URL de la video :
+# [A COMPLETER APRES ENREGISTREMENT]
+#
+# Plateforme hebergement suggeree : YouTube (non-liste) ou Google Drive

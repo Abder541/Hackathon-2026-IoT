@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Architecture IoT 3D — Hackathon 2026 Équipe 01</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #050d1a; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+  canvas { display: block; }
+
+  #ui {
+    position: fixed; top: 0; left: 0; width: 100%; pointer-events: none;
+    z-index: 10;
+  }
+  #title {
+    text-align: center; padding: 18px 0 4px;
+    color: #7dd3fc; font-size: 22px; font-weight: 700; letter-spacing: 2px;
+    text-shadow: 0 0 20px #0ea5e9;
+  }
+  #subtitle {
+    text-align: center; color: #475569; font-size: 12px; letter-spacing: 4px; margin-bottom: 8px;
+  }
+
+  #legend {
+    position: fixed; bottom: 24px; left: 24px;
+    background: rgba(5,13,26,0.85); border: 1px solid #1e3a5f;
+    border-radius: 10px; padding: 14px 18px; color: #94a3b8; font-size: 12px;
+    pointer-events: none;
+  }
+  #legend h4 { color: #7dd3fc; margin-bottom: 8px; font-size: 13px; }
+  #legend div { margin: 4px 0; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  #stats {
+    position: fixed; bottom: 24px; right: 24px;
+    background: rgba(5,13,26,0.85); border: 1px solid #1e3a5f;
+    border-radius: 10px; padding: 14px 18px; color: #94a3b8; font-size: 12px;
+    min-width: 200px;
+  }
+  #stats h4 { color: #7dd3fc; margin-bottom: 8px; font-size: 13px; }
+  .stat-row { display: flex; justify-content: space-between; margin: 5px 0; }
+  .stat-val { color: #22d3ee; font-weight: bold; }
+  .stat-val.alert { color: #f87171; animation: blink 1s infinite; }
+
+  #controls {
+    position: fixed; top: 80px; right: 24px;
+    color: #475569; font-size: 11px; text-align: right;
+  }
+
+  #tooltip {
+    position: fixed; display: none;
+    background: rgba(5,13,26,0.95); border: 1px solid #0ea5e9;
+    border-radius: 8px; padding: 10px 14px; color: #e2e8f0; font-size: 13px;
+    pointer-events: none; z-index: 20; max-width: 220px;
+  }
+  #tooltip h5 { color: #7dd3fc; margin-bottom: 6px; font-size: 14px; }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="title">ARCHITECTURE IOT — SUPERVISION INDUSTRIELLE</div>
+  <div id="subtitle">HACKATHON 2026 · ÉQUIPE 01 · SATOM IT LEARNING SOLUTIONS</div>
+</div>
+
+<div id="controls">🖱 Clic + glisser : rotation<br>Molette : zoom<br>Clic droit + glisser : déplacer</div>
+
+<div id="legend">
+  <h4>COMPOSANTS</h4>
+  <div><div class="dot" style="background:#f59e0b"></div>Capteurs IoT</div>
+  <div><div class="dot" style="background:#8b5cf6"></div>Mosquitto MQTT</div>
+  <div><div class="dot" style="background:#10b981"></div>Node-RED</div>
+  <div><div class="dot" style="background:#3b82f6"></div>InfluxDB</div>
+  <div><div class="dot" style="background:#ec4899"></div>Grafana</div>
+  <div><div class="dot" style="background:#06b6d4"></div>Telegram / Email</div>
+</div>
+
+<div id="stats">
+  <h4>DONNÉES EN DIRECT</h4>
+  <div class="stat-row"><span>Temp. Zone A</span><span class="stat-val" id="s-tempA">--°C</span></div>
+  <div class="stat-row"><span>Temp. Zone B</span><span class="stat-val" id="s-tempB">--°C</span></div>
+  <div class="stat-row"><span>Humidité Zone C</span><span class="stat-val" id="s-humC">--%</span></div>
+  <div class="stat-row"><span>Vibrations</span><span class="stat-val" id="s-vib">--</span></div>
+  <div class="stat-row"><span>Messages/s</span><span class="stat-val" id="s-msg">--</span></div>
+  <div class="stat-row"><span>Alertes</span><span class="stat-val" id="s-alert">0</span></div>
+</div>
+
+<div id="tooltip"><h5 id="tt-title"></h5><div id="tt-body"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ─── SCENE SETUP ───────────────────────────────────────────────────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x050d1a);
+scene.fog = new THREE.FogExp2(0x050d1a, 0.018);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 500);
+camera.position.set(0, 12, 28);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(devicePixelRatio);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+// ─── LIGHTING ──────────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0x112244, 1.5));
+const dir = new THREE.DirectionalLight(0x4488ff, 1.2);
+dir.position.set(10, 20, 10);
+dir.castShadow = true;
+scene.add(dir);
+[[-15,8,-5],[15,8,-5],[0,8,15]].forEach(([x,y,z]) => {
+  const pt = new THREE.PointLight(0x0ea5e9, 0.4, 30);
+  pt.position.set(x,y,z);
+  scene.add(pt);
+});
+
+// ─── GRID FLOOR ────────────────────────────────────────────────────────────
+const grid = new THREE.GridHelper(60, 30, 0x0f2744, 0x0a1929);
+grid.position.y = -5;
+scene.add(grid);
+
+// ─── ORBIT CONTROLS (manual) ──────────────────────────────────────────────
+let isDragging = false, isRightDrag = false;
+let prevMouse = {x:0, y:0};
+let spherical = {theta: 0.3, phi: 1.1, radius: 28};
+let target = new THREE.Vector3(0, 1, 0);
+
+function updateCamera() {
+  camera.position.set(
+    target.x + spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta),
+    target.y + spherical.radius * Math.cos(spherical.phi),
+    target.z + spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta)
+  );
+  camera.lookAt(target);
+}
+updateCamera();
+
+renderer.domElement.addEventListener('mousedown', e => {
+  isDragging = true; isRightDrag = e.button === 2;
+  prevMouse = {x: e.clientX, y: e.clientY};
+});
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+window.addEventListener('mouseup', () => isDragging = false);
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - prevMouse.x, dy = e.clientY - prevMouse.y;
+  if (isRightDrag) {
+    const right = new THREE.Vector3().crossVectors(camera.getWorldDirection(new THREE.Vector3()), camera.up).normalize();
+    target.addScaledVector(right, -dx * 0.03);
+    target.y += dy * 0.03;
+  } else {
+    spherical.theta -= dx * 0.006;
+    spherical.phi = Math.max(0.2, Math.min(Math.PI*0.48, spherical.phi + dy * 0.006));
+  }
+  updateCamera();
+  prevMouse = {x: e.clientX, y: e.clientY};
+});
+renderer.domElement.addEventListener('wheel', e => {
+  spherical.radius = Math.max(8, Math.min(60, spherical.radius + e.deltaY * 0.03));
+  updateCamera();
+});
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────
+function makeLabel(text, size=0.5, color=0xffffff) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512; canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,512,128);
+  ctx.font = `bold ${Math.round(size*60)}px Segoe UI`;
+  ctx.fillStyle = '#' + color.toString(16).padStart(6,'0');
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, 256, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({map: tex, transparent: true});
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(size*6, size*1.5, 1);
+  return sprite;
+}
+
+function makeSubLabel(text, size=0.35, color=0x64748b) {
+  return makeLabel(text, size, color);
+}
+
+function roundedBox(w, h, d, color, emissive=0x000000) {
+  const geo = new THREE.BoxGeometry(w, h, d, 1, 1, 1);
+  const mat = new THREE.MeshPhongMaterial({
+    color, emissive, shininess: 80,
+    transparent: true, opacity: 0.92
+  });
+  return new THREE.Mesh(geo, mat);
+}
+
+function glowSphere(r, color) {
+  const geo = new THREE.SphereGeometry(r, 24, 24);
+  const mat = new THREE.MeshPhongMaterial({color, emissive: color, emissiveIntensity: 0.5, shininess:120});
+  return new THREE.Mesh(geo, mat);
+}
+
+function wireBox(w, h, d, color) {
+  const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(w,h,d));
+  const mat = new THREE.LineBasicMaterial({color, transparent:true, opacity:0.4});
+  return new THREE.LineSegments(geo, mat);
+}
+
+// ─── NODE CLASS ────────────────────────────────────────────────────────────
+const nodes = {};
+
+function addNode(id, opts) {
+  const {x, y, z, color, size=[2,1.2,1.6], label, sublabel, info} = opts;
+  const group = new THREE.Group();
+  group.position.set(x, y, z);
+
+  const body = roundedBox(...size, color, new THREE.Color(color).multiplyScalar(0.3).getHex());
+  body.castShadow = true; body.receiveShadow = true;
+  group.add(body);
+
+  const wire = wireBox(size[0]+0.06, size[1]+0.06, size[2]+0.06, color);
+  group.add(wire);
+
+  const lbl = makeLabel(label, 0.5, 0xffffff);
+  lbl.position.set(0, size[1]/2 + 0.6, 0);
+  group.add(lbl);
+
+  if (sublabel) {
+    const sub = makeSubLabel(sublabel, 0.32, 0x94a3b8);
+    sub.position.set(0, size[1]/2 + 0.15, 0);
+    group.add(sub);
+  }
+
+  group.userData = {id, info, color, baseY: y};
+  scene.add(group);
+  nodes[id] = group;
+  return group;
+}
+
+// ─── ARCHITECTURE NODES ───────────────────────────────────────────────────
+// Sensors — bottom layer
+const sensorDefs = [
+  {id:'sA1', x:-8, z:10, label:'TEMP', zone:'A'},
+  {id:'sA2', x:-6, z:10, label:'HUM', zone:'A'},
+  {id:'sA3', x:-10, z:10, label:'VIB', zone:'A'},
+  {id:'sB1', x:0,  z:10, label:'TEMP', zone:'B'},
+  {id:'sB2', x:2,  z:10, label:'ELEC', zone:'B'},
+  {id:'sC1', x:8,  z:10, label:'TEMP', zone:'C'},
+  {id:'sC2', x:10, z:10, label:'HUM', zone:'C'},
+];
+
+sensorDefs.forEach(s => {
+  const col = {A:0xf59e0b, B:0xfbbf24, C:0xf97316}[s.zone];
+  addNode(s.id, {
+    x: s.x, y: -3.5, z: s.z,
+    color: col, size: [1.1, 0.7, 0.9],
+    label: s.label,
+    sublabel: `Zone ${s.zone}`,
+    info: {
+      name: `Capteur ${s.label} — Zone ${s.zone}`,
+      desc: 'Mesure toutes les 5 secondes',
+      proto: 'Protocole : MQTT',
+      topic: `Topic : sensors/zone${s.zone.toLowerCase()}/${s.label.toLowerCase()}`
+    }
+  });
+});
+
+// Zone labels
+[{x:-8,z:12,t:'ZONE A — PRODUCTION'},{x:1,z:12,t:'ZONE B — SERVEURS'},{x:9,z:12,t:'ZONE C — STOCKAGE'}].forEach(z => {
+  const lbl = makeLabel(z.t, 0.38, 0xfbbf24);
+  lbl.position.set(z.x, -2.5, z.z);
+  scene.add(lbl);
+});
+
+// MQTT
+addNode('mqtt', {
+  x: 0, y: 0, z: 2,
+  color: 0x7c3aed, size: [4.5, 1.4, 1.8],
+  label: 'MOSQUITTO MQTT',
+  sublabel: 'Broker — Port 1883',
+  info: {
+    name: 'Mosquitto MQTT Broker',
+    desc: 'Reçoit et distribue tous les messages des capteurs',
+    port: 'Ports: 1883 · 8883 (TLS) · 9001 (WS)',
+    image: 'eclipse-mosquitto:2.0'
+  }
+});
+
+// Node-RED
+addNode('nodered', {
+  x: 0, y: 4, z: -2,
+  color: 0x059669, size: [5, 1.5, 2],
+  label: 'NODE-RED',
+  sublabel: 'Orchestration — Port 1880',
+  info: {
+    name: 'Node-RED',
+    desc: '4 onglets: Simulation · Ingestion · Alertes · Notifications',
+    port: 'Port: 1880',
+    image: 'nodered/node-red:3.1'
+  }
+});
+
+// InfluxDB
+addNode('influxdb', {
+  x: -5, y: 8, z: -5,
+  color: 0x2563eb, size: [4, 1.4, 1.8],
+  label: 'INFLUXDB',
+  sublabel: 'Time-Series DB — Port 8086',
+  info: {
+    name: 'InfluxDB 2.7',
+    desc: 'Stocke 30 jours de données temporelles',
+    port: 'Port: 8086',
+    bucket: 'Bucket: sensors'
+  }
+});
+
+// Grafana
+addNode('grafana', {
+  x: 5, y: 8, z: -5,
+  color: 0xdb2777, size: [4, 1.4, 1.8],
+  label: 'GRAFANA',
+  sublabel: 'Dashboards — Port 3000',
+  info: {
+    name: 'Grafana 10.2',
+    desc: 'Tableaux de bord temps réel + alerting natif',
+    port: 'Port: 3000',
+    creds: 'admin / Grafana2026Secure'
+  }
+});
+
+// Telegram
+addNode('telegram', {
+  x: -8, y: 12, z: -3,
+  color: 0x0891b2, size: [3, 1.1, 1.4],
+  label: 'TELEGRAM',
+  sublabel: '@Abder_rms2_bot',
+  info: {
+    name: 'Notifications Telegram',
+    desc: 'Alerte en moins de 2 secondes sur téléphone',
+    bot: '@Abder_rms2_bot',
+    latency: 'Latence: < 2s'
+  }
+});
+
+// Email
+addNode('email', {
+  x: 8, y: 12, z: -3,
+  color: 0x0891b2, size: [3, 1.1, 1.4],
+  label: 'EMAIL',
+  sublabel: 'Gmail SMTP',
+  info: {
+    name: 'Notifications Email',
+    desc: 'Email automatique via Gmail SMTP',
+    smtp: 'smtp.gmail.com:587',
+    node: 'node-red-node-email'
+  }
+});
+
+// ─── CONNECTIONS ──────────────────────────────────────────────────────────
+const connections = [
+  ...sensorDefs.map(s => ({from: s.id, to: 'mqtt', color: 0xf59e0b})),
+  {from: 'mqtt',     to: 'nodered',  color: 0x7c3aed},
+  {from: 'nodered',  to: 'influxdb', color: 0x10b981},
+  {from: 'nodered',  to: 'grafana',  color: 0x10b981},
+  {from: 'nodered',  to: 'telegram', color: 0x06b6d4},
+  {from: 'nodered',  to: 'email',    color: 0x06b6d4},
+  {from: 'influxdb', to: 'grafana',  color: 0x3b82f6},
+];
+
+function getNodeCenter(id) {
+  return nodes[id].position.clone();
+}
+
+// Draw static tube connections
+connections.forEach(({from, to, color}) => {
+  const a = getNodeCenter(from), b = getNodeCenter(to);
+  const mid = a.clone().lerp(b, 0.5);
+  mid.y += 0.8;
+  const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
+  const pts = curve.getPoints(30);
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const mat = new THREE.LineBasicMaterial({color, transparent:true, opacity:0.25});
+  scene.add(new THREE.Line(geo, mat));
+});
+
+// ─── PARTICLES ON CONNECTIONS ─────────────────────────────────────────────
+const particles = [];
+
+function spawnParticle(fromId, toId, color, speed=1) {
+  const a = getNodeCenter(fromId), b = getNodeCenter(toId);
+  const mid = a.clone().lerp(b, 0.5); mid.y += 0.8;
+  const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
+
+  const geo = new THREE.SphereGeometry(0.12, 8, 8);
+  const mat = new THREE.MeshPhongMaterial({color, emissive: color, emissiveIntensity:1});
+  const mesh = new THREE.Mesh(geo, mat);
+  scene.add(mesh);
+  particles.push({mesh, curve, t:0, speed: 0.004 * speed, from: fromId, to: toId});
+}
+
+// Spawn interval per connection
+const spawnTimers = {};
+connections.forEach(conn => {
+  const key = conn.from + '-' + conn.to;
+  const delay = 800 + Math.random() * 1200;
+  spawnTimers[key] = {conn, timer: Math.random() * delay, delay};
+});
+
+// ─── TOOLTIP ──────────────────────────────────────────────────────────────
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const tooltip = document.getElementById('tooltip');
+const ttTitle = document.getElementById('tt-title');
+const ttBody = document.getElementById('tt-body');
+
+window.addEventListener('mousemove', e => {
+  mouse.x = (e.clientX / innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  const meshes = Object.values(nodes).map(g => g.children[0]).filter(Boolean);
+  const hits = raycaster.intersectObjects(meshes);
+
+  if (hits.length > 0) {
+    const hit = hits[0].object.parent;
+    const info = hit.userData.info;
+    if (info) {
+      ttTitle.textContent = info.name || '';
+      ttBody.innerHTML = Object.entries(info)
+        .filter(([k]) => k !== 'name')
+        .map(([,v]) => `<div style="margin:2px 0;color:#94a3b8">${v}</div>`).join('');
+      tooltip.style.display = 'block';
+      tooltip.style.left = (e.clientX + 14) + 'px';
+      tooltip.style.top = (e.clientY - 10) + 'px';
+    }
+  } else {
+    tooltip.style.display = 'none';
+  }
+});
+
+// ─── SIMULATED DATA ───────────────────────────────────────────────────────
+let alertCount = 0;
+const dataState = {tempA: 22, tempB: 45, humC: 62, vib: 2.1, msg: 3};
+let alertFlash = 0;
+
+function updateStats() {
+  dataState.tempA += (Math.random() - 0.48) * 1.5;
+  dataState.tempA = Math.max(18, Math.min(95, dataState.tempA));
+  dataState.tempB += (Math.random() - 0.47) * 2;
+  dataState.tempB = Math.max(30, Math.min(90, dataState.tempB));
+  dataState.humC += (Math.random() - 0.5) * 2;
+  dataState.humC = Math.max(40, Math.min(95, dataState.humC));
+  dataState.vib += (Math.random() - 0.5) * 0.5;
+  dataState.vib = Math.max(0.5, Math.min(9, dataState.vib));
+  dataState.msg = Math.round(2 + Math.random() * 5);
+
+  const isAlert = dataState.tempA > 80 || dataState.tempB > 80 || dataState.humC > 80 || dataState.vib > 7;
+  if (isAlert) { alertCount++; alertFlash = 60; }
+
+  const fmtTemp = v => v.toFixed(1) + '°C';
+  const sA = document.getElementById('s-tempA');
+  const sB = document.getElementById('s-tempB');
+  const hC = document.getElementById('s-humC');
+  const vib = document.getElementById('s-vib');
+
+  sA.textContent = fmtTemp(dataState.tempA);
+  sA.className = 'stat-val' + (dataState.tempA > 80 ? ' alert' : '');
+  sB.textContent = fmtTemp(dataState.tempB);
+  sB.className = 'stat-val' + (dataState.tempB > 80 ? ' alert' : '');
+  hC.textContent = dataState.humC.toFixed(1) + '%';
+  hC.className = 'stat-val' + (dataState.humC > 80 ? ' alert' : '');
+  vib.textContent = dataState.vib.toFixed(2);
+  vib.className = 'stat-val' + (dataState.vib > 7 ? ' alert' : '');
+  document.getElementById('s-msg').textContent = dataState.msg + '/s';
+  document.getElementById('s-alert').textContent = alertCount;
+  document.getElementById('s-alert').className = 'stat-val' + (alertCount > 0 ? ' alert' : '');
+}
+setInterval(updateStats, 1500);
+
+// ─── ANIMATE ──────────────────────────────────────────────────────────────
+let frameCount = 0;
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+  frameCount++;
+
+  // Spawn particles
+  Object.values(spawnTimers).forEach(st => {
+    st.timer += 16;
+    if (st.timer > st.delay) {
+      st.timer = 0;
+      spawnParticle(st.conn.from, st.conn.to, st.conn.color,
+        st.conn.from.startsWith('s') ? 0.8 : 1.2);
+    }
+  });
+
+  // Move particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.t += p.speed;
+    if (p.t >= 1) {
+      scene.remove(p.mesh);
+      particles.splice(i, 1);
+    } else {
+      p.mesh.position.copy(p.curve.getPoint(p.t));
+    }
+  }
+
+  // Bob nodes gently
+  Object.values(nodes).forEach(n => {
+    const offset = Math.sin(t * 0.6 + n.position.x * 0.3) * 0.06;
+    n.position.y = n.userData.baseY + offset;
+  });
+
+  // Alert flash — make mqtt/nodered/telegram glow red
+  if (alertFlash > 0) {
+    alertFlash--;
+    const intensity = (alertFlash % 20 < 10) ? 0.5 : 0;
+    ['mqtt', 'nodered', 'telegram', 'email'].forEach(id => {
+      if (nodes[id]) nodes[id].children[0].material.emissiveIntensity = intensity;
+    });
+  } else {
+    ['mqtt', 'nodered', 'telegram', 'email'].forEach(id => {
+      if (nodes[id]) nodes[id].children[0].material.emissiveIntensity = 0.15;
+    });
+  }
+
+  // Slow auto-rotation when not dragging
+  if (!isDragging) {
+    spherical.theta += 0.0008;
+    updateCamera();
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

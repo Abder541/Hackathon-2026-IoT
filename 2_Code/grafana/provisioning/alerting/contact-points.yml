@@ -1,0 +1,39 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: IoT-Alertes
+    receivers:
+      - uid: telegram-receiver
+        type: telegram
+        settings:
+          bottoken: ${TELEGRAM_BOT_TOKEN}
+          chatid: "${TELEGRAM_CHAT_ID}"
+          message: |
+            🔴 ALERTE {{ .CommonLabels.alertname }}
+            Zone : {{ .CommonLabels.zone }}
+            {{ range .Alerts }}
+            • {{ .Annotations.summary }}
+            • Valeur : {{ .Values.B }}
+            • Heure : {{ .StartsAt.Local }}
+            {{ end }}
+            — Hackathon IoT 2026 | Equipe 01
+          disable_notification: false
+          parse_mode: Markdown
+        disableResolveMessage: false
+
+      - uid: email-receiver
+        type: email
+        settings:
+          addresses: ${EMAIL_TO}
+          subject: "[IoT ALERTE] {{ .CommonLabels.alertname }} - {{ .CommonLabels.zone }}"
+          message: |
+            ALERTE IoT : {{ .CommonLabels.alertname }}
+            Zone supervisee : {{ .CommonLabels.zone }}
+            {{ range .Alerts }}
+            Detail : {{ .Annotations.summary }}
+            Heure : {{ .StartsAt.Local }}
+            {{ end }}
+            ---
+            Hackathon IoT 2026 - Equipe 01 - Satom IT Learning Solutions
+        disableResolveMessage: false

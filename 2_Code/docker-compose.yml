@@ -1,0 +1,148 @@
+##############################################
+# HACKATHON IoT 2026 - Docker Compose
+# Plateforme de supervision industrielle
+# Architecture Edge-Fog-Cloud
+##############################################
+
+services:
+  # ============================================
+  # MOSQUITTO - Broker MQTT avec TLS
+  # ============================================
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: iot-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"     # MQTT standard (interne)
+      - "8883:8883"     # MQTT over TLS (sécurisé)
+      - "9001:9001"     # WebSocket (pour debug)
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+      - ./certs:/mosquitto/certs
+    networks:
+      - iot-network
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -u ${MOSQUITTO_USER} -P ${MOSQUITTO_PASSWORD} | grep -v Error || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # INFLUXDB - Base de données temporelle
+  # ============================================
+  influxdb:
+    image: influxdb:2.7
+    container_name: iot-influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
+      - DOCKER_INFLUXDB_INIT_RETENTION=30d
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+    networks:
+      - iot-network
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # NODE-RED - Orchestration & Traitement
+  # ============================================
+  nodered:
+    image: nodered/node-red:3.1
+    container_name: iot-nodered
+    restart: unless-stopped
+    ports:
+      - "1880:1880"
+    environment:
+      - TZ=Europe/Paris
+      - NODE_RED_CREDENTIAL_SECRET=${NODE_RED_CREDENTIAL_SECRET}
+      - MQTT_USER=${MOSQUITTO_USER}
+      - MQTT_PASSWORD=${MOSQUITTO_PASSWORD}
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+      - INFLUXDB_ORG=${INFLUXDB_ORG}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
+      - INFLUXDB_URL=http://influxdb:8086
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - EMAIL_FROM=${EMAIL_FROM}
+      - EMAIL_TO=${EMAIL_TO}
+      - EMAIL_PASS=${EMAIL_PASS}
+    volumes:
+      - ./nodered/data:/data
+    networks:
+      - iot-network
+    depends_on:
+      mosquitto:
+        condition: service_started
+      influxdb:
+        condition: service_started
+
+  # ============================================
+  # GRAFANA - Visualisation & Dashboards
+  # ============================================
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: iot-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+      - INFLUXDB_ORG=${INFLUXDB_ORG}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
+      # Alerting Grafana natif (unified alerting uniquement)
+      - GF_UNIFIED_ALERTING_ENABLED=true
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - EMAIL_TO=${EMAIL_TO}
+      # SMTP Grafana (optionnel - activer si EMAIL configure)
+      - GF_SMTP_ENABLED=${SMTP_ENABLED:-false}
+      - GF_SMTP_HOST=${SMTP_HOST:-smtp.gmail.com:587}
+      - GF_SMTP_USER=${EMAIL_FROM:-}
+      - GF_SMTP_PASSWORD=${EMAIL_PASS:-}
+      - GF_SMTP_FROM_ADDRESS=${EMAIL_FROM:-noreply@hackathon-iot.local}
+      - GF_SMTP_FROM_NAME=Hackathon IoT 2026
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - iot-network
+    depends_on:
+      influxdb:
+        condition: service_started
+
+# ============================================
+# VOLUMES PERSISTANTS
+# ============================================
+volumes:
+  influxdb-data:
+    driver: local
+  influxdb-config:
+    driver: local
+  grafana-data:
+    driver: local
+
+# ============================================
+# RÉSEAU INTERNE
+# ============================================
+networks:
+  iot-network:
+    driver: bridge
+    name: iot-supervision-network

@@ -1,0 +1,59 @@
+# ============================================
+# FICHIERS SENSIBLES — NE JAMAIS COMMITTER
+# ============================================
+
+# Variables d'environnement (secrets, tokens, mots de passe)
+2_Code/.env
+.env
+
+# Credentials Node-RED (MQTT, InfluxDB, Email)
+2_Code/nodered/data/flows_cred.json
+flows_cred.json
+
+# Certificats TLS et clés privées
+2_Code/certs/*.key
+2_Code/certs/*.crt
+2_Code/certs/*.pem
+2_Code/certs/*.srl
+certs/*.key
+certs/*.crt
+certs/*.pem
+
+# ============================================
+# DÉPENDANCES
+# ============================================
+
+# Node modules
+node_modules/
+5_Presentation/node_modules/
+2_Code/nodered/data/node_modules/
+
+# NPM logs
+2_Code/nodered/data/.npm/
+npm-debug.log*
+
+# Mosquitto logs (trop volumineux - 25MB+)
+2_Code/mosquitto/log/
+
+# Base de données Mosquitto
+2_Code/mosquitto/data/mosquitto.db
+
+# Node-RED backup configs
+2_Code/nodered/data/.config.*.backup
+
+# Scripts temporaires de développement
+2_Code/nodered/data/add_notifications.py
+
+# Fichiers internes Node-RED (générés automatiquement)
+2_Code/nodered/data/.config.nodes.json
+2_Code/nodered/data/.config.*.json
+2_Code/nodered/data/.config.runtime.json
+2_Code/nodered/data/.config.users.json
+
+# Fichier de mots de passe Mosquitto (généré au démarrage)
+2_Code/mosquitto/config/passwd
+
+# Fichiers temporaires
+*.tmp
+.DS_Store
+Thumbs.db

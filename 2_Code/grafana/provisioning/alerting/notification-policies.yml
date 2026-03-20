@@ -1,0 +1,13 @@
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: IoT-Alertes
+    group_by: ['alertname', 'zone']
+    group_wait: 10s
+    group_interval: 1m
+    repeat_interval: 5m
+    routes:
+      - receiver: IoT-Alertes
+        matchers:
+          - alertname =~ ".*"

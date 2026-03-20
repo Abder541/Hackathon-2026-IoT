@@ -1,0 +1,1220 @@
+[
+  {
+    "id": "mqtt-broker-config",
+    "type": "mqtt-broker",
+    "name": "Mosquitto IoT",
+    "broker": "mosquitto",
+    "port": "1883",
+    "clientid": "nodered-iot-client",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true,
+    "birthTopic": "nodered/status",
+    "birthQos": "0",
+    "birthPayload": "online",
+    "closeTopic": "nodered/status",
+    "closeQos": "0",
+    "closePayload": "offline",
+    "willTopic": "nodered/status",
+    "willQos": "0",
+    "willPayload": "disconnected",
+    "userProps": "",
+    "sessionExpiry": ""
+  },
+  {
+    "id": "influxdb-config",
+    "type": "influxdb",
+    "hostname": "influxdb",
+    "port": "8086",
+    "protocol": "http",
+    "database": "",
+    "name": "InfluxDB IoT",
+    "usetls": false,
+    "tls": "",
+    "influxdbVersion": "2.0",
+    "url": "http://influxdb:8086",
+    "rejectUnauthorized": false
+  },
+  {
+    "id": "tab-simulation",
+    "type": "tab",
+    "label": "1. Simulation Capteurs",
+    "disabled": false,
+    "info": "Simulation des capteurs IoT pour 3 zones industrielles avec d\u00e9rive progressive"
+  },
+  {
+    "id": "comment-ss",
+    "type": "comment",
+    "z": "tab-simulation",
+    "name": "\u2550\u2550\u2550 SALLE SERVEUR \u2550\u2550\u2550  Temp\u00e9rature + Humidit\u00e9  |  Fr\u00e9quence: 5s",
+    "info": "Seuils: Temp\u00e9rature > 28\u00b0C | Humidit\u00e9 > 70%",
+    "x": 300,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "sim-ss-inject",
+    "type": "inject",
+    "z": "tab-simulation",
+    "name": "Cycle 5s",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "5",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "3",
+    "topic": "iot/salle-serveur/data",
+    "payload": "",
+    "payloadType": "date",
+    "x": 110,
+    "y": 100,
+    "wires": [
+      [
+        "sim-ss-function"
+      ]
+    ]
+  },
+  {
+    "id": "sim-ss-function",
+    "type": "function",
+    "z": "tab-simulation",
+    "name": "Capteurs Salle Serveur",
+    "func": "// \u2550\u2550\u2550 Simulation Salle Serveur \u2550\u2550\u2550\n// Base: Temp 24\u00b0C, Humidit\u00e9 45%\n// D\u00e9rive progressive simulant usure climatisation\n\nlet count = context.get('count') || 0;\ncount++;\ncontext.set('count', count);\n\n// D\u00e9rive lente (simule d\u00e9gradation climatisation)\nlet drift = Math.min(count * 0.005, 8);\n\n// Temp\u00e9rature: 24\u00b0C \u00b1 2.5\u00b0C + d\u00e9rive\nlet temperature = 24 + (Math.random() * 5 - 2.5) + drift;\ntemperature = Math.round(temperature * 100) / 100;\n\n// Humidit\u00e9: 45% \u00b1 6% + d\u00e9rive corr\u00e9l\u00e9e\nlet humidite = 45 + (Math.random() * 12 - 6) + (drift * 0.8);\nhumidite = Math.round(Math.min(Math.max(humidite, 10), 99) * 100) / 100;\n\nmsg.payload = {\n    zone: \"salle-serveur\",\n    timestamp: new Date().toISOString(),\n    capteurs: {\n        temperature: temperature,\n        humidite: humidite\n    }\n};\nmsg.topic = \"iot/salle-serveur/data\";\n\nnode.status({\n    fill: temperature > 28 ? \"red\" : \"green\",\n    shape: \"dot\",\n    text: `T:${temperature}\u00b0C | H:${humidite}%`\n});\n\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "// Reset compteur au d\u00e9ploiement\ncontext.set('count', 0);",
+    "finalize": "",
+    "libs": [],
+    "x": 350,
+    "y": 100,
+    "wires": [
+      [
+        "sim-ss-mqtt",
+        "sim-ss-debug"
+      ]
+    ]
+  },
+  {
+    "id": "sim-ss-mqtt",
+    "type": "mqtt out",
+    "z": "tab-simulation",
+    "name": "\u2192 MQTT",
+    "topic": "iot/salle-serveur/data",
+    "qos": "1",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "application/json",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt-broker-config",
+    "x": 570,
+    "y": 80,
+    "wires": []
+  },
+  {
+    "id": "sim-ss-debug",
+    "type": "debug",
+    "z": "tab-simulation",
+    "name": "Debug SS",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 570,
+    "y": 120,
+    "wires": []
+  },
+  {
+    "id": "comment-at",
+    "type": "comment",
+    "z": "tab-simulation",
+    "name": "\u2550\u2550\u2550 ATELIER TECHNIQUE \u2550\u2550\u2550  Vibration + Temp\u00e9rature  |  Fr\u00e9quence: 2s",
+    "info": "Seuils: Vibration > 5.0mm/s | Temp\u00e9rature > 40\u00b0C",
+    "x": 320,
+    "y": 180,
+    "wires": []
+  },
+  {
+    "id": "sim-at-inject",
+    "type": "inject",
+    "z": "tab-simulation",
+    "name": "Cycle 2s",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "2",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "5",
+    "topic": "iot/atelier/data",
+    "payload": "",
+    "payloadType": "date",
+    "x": 110,
+    "y": 240,
+    "wires": [
+      [
+        "sim-at-function"
+      ]
+    ]
+  },
+  {
+    "id": "sim-at-function",
+    "type": "function",
+    "z": "tab-simulation",
+    "name": "Capteurs Atelier",
+    "func": "// \u2550\u2550\u2550 Simulation Atelier Technique \u2550\u2550\u2550\n// Base: Vibration 2.5mm/s, Temp 35\u00b0C\n// Spikes al\u00e9atoires simulant anomalies machine\n\nlet count = context.get('count') || 0;\ncount++;\ncontext.set('count', count);\n\nlet drift = Math.min(count * 0.003, 5);\n\n// Vibration: 2.5mm/s \u00b1 1.2mm/s + drift + spikes\nlet vibration = 2.5 + (Math.random() * 2.4 - 1.2) + drift;\n\n// Spike al\u00e9atoire (5% de chance) simulant d\u00e9faut m\u00e9canique\nif (Math.random() < 0.05) {\n    vibration += 3 + Math.random() * 3;\n}\nvibration = Math.round(Math.max(vibration, 0.1) * 100) / 100;\n\n// Temp\u00e9rature: 35\u00b0C \u00b1 3\u00b0C + drift (corr\u00e9l\u00e9e aux vibrations)\nlet temperature = 35 + (Math.random() * 6 - 3) + drift * 0.8;\nif (vibration > 5.0) temperature += 2; // surchauffe si vibration haute\ntemperature = Math.round(temperature * 100) / 100;\n\nmsg.payload = {\n    zone: \"atelier\",\n    timestamp: new Date().toISOString(),\n    capteurs: {\n        vibration: vibration,\n        temperature: temperature\n    }\n};\nmsg.topic = \"iot/atelier/data\";\n\nnode.status({\n    fill: vibration > 5.0 ? \"red\" : \"green\",\n    shape: vibration > 5.0 ? \"ring\" : \"dot\",\n    text: `V:${vibration}mm/s | T:${temperature}\u00b0C`\n});\n\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "context.set('count', 0);",
+    "finalize": "",
+    "libs": [],
+    "x": 350,
+    "y": 240,
+    "wires": [
+      [
+        "sim-at-mqtt",
+        "sim-at-debug"
+      ]
+    ]
+  },
+  {
+    "id": "sim-at-mqtt",
+    "type": "mqtt out",
+    "z": "tab-simulation",
+    "name": "\u2192 MQTT",
+    "topic": "iot/atelier/data",
+    "qos": "1",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "application/json",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt-broker-config",
+    "x": 570,
+    "y": 220,
+    "wires": []
+  },
+  {
+    "id": "sim-at-debug",
+    "type": "debug",
+    "z": "tab-simulation",
+    "name": "Debug AT",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 570,
+    "y": 260,
+    "wires": []
+  },
+  {
+    "id": "comment-le",
+    "type": "comment",
+    "z": "tab-simulation",
+    "name": "\u2550\u2550\u2550 LOCAL \u00c9LECTRIQUE \u2550\u2550\u2550  Luminosit\u00e9 + Temp\u00e9rature  |  Fr\u00e9quence: 10s",
+    "info": "Seuils: Luminosit\u00e9 < 50 lux | Temp\u00e9rature > 35\u00b0C",
+    "x": 330,
+    "y": 320,
+    "wires": []
+  },
+  {
+    "id": "sim-le-inject",
+    "type": "inject",
+    "z": "tab-simulation",
+    "name": "Cycle 10s",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "10",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "7",
+    "topic": "iot/local-electrique/data",
+    "payload": "",
+    "payloadType": "date",
+    "x": 120,
+    "y": 380,
+    "wires": [
+      [
+        "sim-le-function"
+      ]
+    ]
+  },
+  {
+    "id": "sim-le-function",
+    "type": "function",
+    "z": "tab-simulation",
+    "name": "Capteurs Local \u00c9lec.",
+    "func": "// \u2550\u2550\u2550 Simulation Local \u00c9lectrique \u2550\u2550\u2550\n// Base: Luminosit\u00e9 200 lux, Temp 30\u00b0C\n// D\u00e9rive descendante luminosit\u00e9 (usure ampoules)\n\nlet count = context.get('count') || 0;\ncount++;\ncontext.set('count', count);\n\nlet drift = Math.min(count * 0.004, 6);\n\n// Luminosit\u00e9: 200 lux \u00b1 50 lux - drift descendante\nlet luminosite = 200 + (Math.random() * 100 - 50) - (drift * 15);\n\n// Coupure intermittente (3% de chance)\nif (Math.random() < 0.03) {\n    luminosite = 5 + Math.random() * 25;\n}\nluminosite = Math.round(Math.max(luminosite, 0) * 100) / 100;\n\n// Temp\u00e9rature: 30\u00b0C \u00b1 2.5\u00b0C + drift\nlet temperature = 30 + (Math.random() * 5 - 2.5) + drift * 0.6;\ntemperature = Math.round(temperature * 100) / 100;\n\nmsg.payload = {\n    zone: \"local-electrique\",\n    timestamp: new Date().toISOString(),\n    capteurs: {\n        luminosite: luminosite,\n        temperature: temperature\n    }\n};\nmsg.topic = \"iot/local-electrique/data\";\n\nnode.status({\n    fill: luminosite < 50 ? \"yellow\" : \"green\",\n    shape: \"dot\",\n    text: `L:${luminosite}lux | T:${temperature}\u00b0C`\n});\n\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "context.set('count', 0);",
+    "finalize": "",
+    "libs": [],
+    "x": 350,
+    "y": 380,
+    "wires": [
+      [
+        "sim-le-mqtt",
+        "sim-le-debug"
+      ]
+    ]
+  },
+  {
+    "id": "sim-le-mqtt",
+    "type": "mqtt out",
+    "z": "tab-simulation",
+    "name": "\u2192 MQTT",
+    "topic": "iot/local-electrique/data",
+    "qos": "1",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "application/json",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt-broker-config",
+    "x": 570,
+    "y": 360,
+    "wires": []
+  },
+  {
+    "id": "sim-le-debug",
+    "type": "debug",
+    "z": "tab-simulation",
+    "name": "Debug LE",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 570,
+    "y": 400,
+    "wires": []
+  },
+  {
+    "id": "tab-ingestion",
+    "type": "tab",
+    "label": "2. Ingestion InfluxDB",
+    "disabled": false,
+    "info": "R\u00e9ception des donn\u00e9es MQTT et \u00e9criture dans InfluxDB (bucket: sensors)"
+  },
+  {
+    "id": "comment-ingestion",
+    "type": "comment",
+    "z": "tab-ingestion",
+    "name": "Souscription wildcard iot/+/data \u2192 Formatage \u2192 InfluxDB (measurement: capteurs_industriels)",
+    "info": "",
+    "x": 350,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "ing-mqtt-all",
+    "type": "mqtt in",
+    "z": "tab-ingestion",
+    "name": "MQTT iot/+/data",
+    "topic": "iot/+/data",
+    "qos": "1",
+    "datatype": "json",
+    "broker": "mqtt-broker-config",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 130,
+    "y": 120,
+    "wires": [
+      [
+        "ing-parse-function"
+      ]
+    ]
+  },
+  {
+    "id": "ing-parse-function",
+    "type": "function",
+    "z": "tab-ingestion",
+    "name": "Formatage InfluxDB",
+    "func": "// \u2550\u2550\u2550 Formatage des donn\u00e9es pour InfluxDB \u2550\u2550\u2550\n// Format: [fieldsObject, tagsObject] pour node-red-contrib-influxdb\n\nlet data = msg.payload;\nif (!data || !data.capteurs || !data.zone) {\n    node.warn('Donn\u00e9es invalides: ' + JSON.stringify(data));\n    return null;\n}\n\nlet zone = data.zone;\nlet fields = {};\n\nfor (let key in data.capteurs) {\n    let val = parseFloat(data.capteurs[key]);\n    if (!isNaN(val)) {\n        fields[key] = val;\n    }\n}\n\nif (Object.keys(fields).length === 0) {\n    return null;\n}\n\n// Format node-red-contrib-influxdb: [fields, tags]\nmsg.payload = [fields, {zone: zone}];\n\nnode.status({\n    fill: \"blue\",\n    shape: \"dot\",\n    text: zone + \": \" + Object.keys(fields).join(\", \")\n});\n\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 370,
+    "y": 120,
+    "wires": [
+      [
+        "ing-influxdb-out",
+        "ing-debug"
+      ]
+    ]
+  },
+  {
+    "id": "ing-influxdb-out",
+    "type": "influxdb out",
+    "z": "tab-ingestion",
+    "influxdb": "influxdb-config",
+    "name": "\u2192 InfluxDB",
+    "measurement": "capteurs_industriels",
+    "precision": "",
+    "retentionPolicy": "",
+    "database": "sensors",
+    "precisionV18FluxV20": "ms",
+    "retpol": "",
+    "org": "hackathon-iot",
+    "bucket": "sensors",
+    "x": 600,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "ing-debug",
+    "type": "debug",
+    "z": "tab-ingestion",
+    "name": "Debug Ingestion",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 610,
+    "y": 140,
+    "wires": []
+  },
+  {
+    "id": "tab-automation",
+    "type": "tab",
+    "label": "3. Automatisation & Alertes",
+    "disabled": false,
+    "info": "6 r\u00e8gles d'automatisation bas\u00e9es sur les seuils d\u00e9finis dans le cahier des charges"
+  },
+  {
+    "id": "comment-rule1",
+    "type": "comment",
+    "z": "tab-automation",
+    "name": "R\u00c8GLE 1: Salle Serveur \u2014 Temp > 28\u00b0C \u2192 Activation Ventilation",
+    "info": "",
+    "x": 300,
+    "y": 30,
+    "wires": []
+  },
+  {
+    "id": "auto-mqtt-ss",
+    "type": "mqtt in",
+    "z": "tab-automation",
+    "name": "MQTT Salle Serveur",
+    "topic": "iot/salle-serveur/data",
+    "qos": "1",
+    "datatype": "json",
+    "broker": "mqtt-broker-config",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 130,
+    "y": 100,
+    "wires": [
+      [
+        "auto-switch-temp-ss",
+        "auto-switch-hum-ss"
+      ]
+    ]
+  },
+  {
+    "id": "auto-switch-temp-ss",
+    "type": "switch",
+    "z": "tab-automation",
+    "name": "Temp > 28\u00b0C ?",
+    "property": "payload.capteurs.temperature",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "gt",
+        "v": "28",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 1,
+    "x": 370,
+    "y": 80,
+    "wires": [
+      [
+        "auto-alert-temp-ss"
+      ]
+    ]
+  },
+  {
+    "id": "auto-alert-temp-ss",
+    "type": "function",
+    "z": "tab-automation",
+    "name": "Alerte + Ventilation",
+    "func": "let temp = msg.payload.capteurs.temperature;\n\nlet alerte = {\n    payload: {\n        type: \"ALERTE_TEMPERATURE\",\n        zone: \"salle-serveur\",\n        niveau: temp > 32 ? \"CRITIQUE\" : \"WARNING\",\n        message: \"Temperature salle serveur elevee : \" + temp + \" C (seuil: 28 C)\",\n        valeur: temp,\n        seuil: 28,\n        timestamp: new Date().toISOString()\n    },\n    topic: \"alertes/salle-serveur/temperature\"\n};\n\nlet action = {\n    payload: {\n        action: \"ACTIVER_VENTILATION\",\n        zone: \"salle-serveur\",\n        intensite: temp > 32 ? \"MAX\" : \"NORMAL\",\n        raison: \"Temperature \" + temp + \" C depasse le seuil de 28 C\",\n        timestamp: new Date().toISOString()\n    },\n    topic: \"actions/ventilation\"\n};\n\nnode.status({fill:\"red\", shape:\"dot\", text: \"ALERTE: \" + temp + \" C\"});\nreturn [alerte, action];",
+    "outputs": 2,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 580,
+    "y": 80,
+    "wires": [
+      [
+        "auto-mqtt-alert-1",
+        "auto-debug-alerts"
+      ],
+      [
+        "auto-mqtt-action-vent",
+        "auto-debug-actions"
+      ]
+    ]
+  },
+  {
+    "id": "auto-mqtt-alert-1",
+    "type": "mqtt out",
+    "z": "tab-automation",
+    "name": "Pub Alerte",
+    "topic": "",
+    "qos": "2",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "application/json",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt-broker-config",
+    "x": 810,
+    "y": 60,
+    "wires": []
+  },
+  {
+    "id": "auto-mqtt-action-vent",
+    "type": "mqtt out",
+    "z": "tab-automation",
+    "name": "Action Ventilation",
+    "topic": "",
+    "qos": "1",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "application/json",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt-broker-config",
+    "x": 830,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "comment-rule2",
+    "type": "comment",
+    "z": "tab-automation",
+    "name": "R\u00c8GLE 2: Salle Serveur \u2014 Humidit\u00e9 > 70% \u2192 D\u00e9shumidificateur",
+    "info": "",
+    "x": 310,
+    "y": 150,
+    "wires": []
+  },
+  {
+    "id": "auto-switch-hum-ss",
+    "type": "switch",
+    "z": "tab-automation",
+    "name": "Hum > 70% ?",
+    "property": "payload.capteurs.humidite",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "gt",
+        "v": "70",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 1,
+    "x": 370,
+    "y": 200,
+    "wires": [
+      [
+        "auto-alert-hum-ss"
+      ]
+    ]
+  },
+  {
+    "id": "auto-alert-hum-ss",
+    "type": "function",
+    "z": "tab-automation",
+    "name": "Alerte Humidit\u00e9",
+    "func": "let hum = msg.payload.capteurs.humidite;\n\nlet alerte = {\n    payload: {\n        type: \"ALERTE_HUMIDITE\",\n        zone: \"salle-serveur\",\n        niveau: hum > 85 ? \"CRITIQUE\" : \"WARNING\",\n        message: \"Humidite salle serveur elevee : \" + hum + \"% (seuil: 70%)\",\n        valeur: hum,\n        seuil: 70,\n        timestamp: new Date().toISOString()\n    },\n    topic: \"alertes/salle-serveur/humidite\"\n};\n\nlet action = {\n    payload: {\n        action: \"ACTIVER_DESHUMIDIFICATEUR\",\n        zone: \"salle-serveur\",\n        intensite: hum > 85 ? \"MAX\" : \"NORMAL\",\n        timestamp: new Date().toISOString()\n    },\n    topic: \"actions/deshumidificateur\"\n};\n\nnode.status({fill:\"yellow\", shape:\"dot\", text: \"Humidite: \" + hum + \"%\"});\nreturn [alerte, action];",
+    "outputs": 2,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 580,
+    "y": 200,
+    "wires": [
+      [
+        "auto-mqtt-alert-2",
+        "auto-debug-alerts"
+      ],
+      [
+        "auto-mqtt-action-deshum",
+        "auto-debug-actions"
+      ]
+    ]
+  },
+  {
+    "id": "auto-mqtt-alert-2",
+    "type": "mqtt out",
+    "z": "tab-automation",
+    "name": "Pub Alerte",
+    "topic": "",
+    "qos": "2",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "application/json",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt-broker-config",
+    "x": 810,
+    "y": 180,
+    "wires": []
+  },
+  {
+    "id": "auto-mqtt-action-deshum",
+    "type": "mqtt out",
+    "z": "tab-automation",
+    "name": "Action D\u00e9shum.",
+    "topic": "",
+    "qos": "1",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "application/json",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt-broker-config",
+    "x": 830,
+    "y": 220,
+    "wires": []
+  },
+  {
+    "id": "comment-rule3",
+    "type": "comment",
+    "z": "tab-automation",
+    "name": "R\u00c8GLE 3: Atelier \u2014 Vibration > 5.0mm/s \u2192 Arr\u00eat Machine",
+    "info": "",
+    "x": 290,
+    "y": 270,
+    "wires": []
+  },
+  {
+    "id": "auto-mqtt-at",
+    "type": "mqtt in",
+    "z": "tab-automation",
+    "name": "MQTT Atelier",
+    "topic": "iot/atelier/data",
+    "qos": "1",
+    "datatype": "json",
+    "broker": "mqtt-broker-config",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 120,
+    "y": 340,
+    "wires": [
+      [
+        "auto-switch-vib",
+        "auto-switch-temp-at"
+      ]
+    ]
+  },
+  {
+    "id": "auto-switch-vib",
+    "type": "switch",
+    "z": "tab-automation",
+    "name": "Vib > 5.0 ?",
+    "property": "payload.capteurs.vibration",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "gt",
+        "v": "5.0",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 1,
+    "x": 360,
+    "y": 320,
+    "wires": [
+      [
+        "auto-alert-vib"
+      ]
+    ]
+  },
+  {
+    "id": "auto-alert-vib",
+    "type": "function",
+    "z": "tab-automation",
+    "name": "Alerte + Arr\u00eat Machine",
+    "func": "let vib = msg.payload.capteurs.vibration;\n\nlet alerte = {\n    payload: {\n        type: \"ALERTE_VIBRATION\",\n        zone: \"atelier\",\n        niveau: vib > 7.0 ? \"CRITIQUE\" : \"WARNING\",\n        message: \"Vibration excessive atelier : \" + vib + \"mm/s (seuil: 5.0mm/s)\",\n        valeur: vib,\n        seuil: 5.0,\n        timestamp: new Date().toISOString()\n    },\n    topic: \"alertes/atelier/vibration\"\n};\n\nlet action = {\n    payload: {\n        action: \"ARRET_MACHINE\",\n        zone: \"atelier\",\n        urgence: vib > 7.0 ? \"IMMEDIAT\" : \"PROGRESSIF\",\n        raison: \"Vibration \" + vib + \"mm/s depasse le seuil de 5.0mm/s\",\n        timestamp: new Date().toISOString()\n    },\n    topic: \"actions/arret-machine\"\n};\n\nnode.status({fill:\"red\", shape:\"ring\", text: \"VIBRATION: \" + vib + \"mm/s\"});\nreturn [alerte, action];",
+    "outputs": 2,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 580,
+    "y": 320,
+    "wires": [
+      [
+        "auto-mqtt-alert-3",
+        "auto-debug-alerts"
+      ],
+      [
+        "auto-mqtt-action-machine",
+        "auto-debug-actions"
+      ]
+    ]
+  },
+  {
+    "id": "auto-mqtt-alert-3",
+    "type": "mqtt out",
+    "z": "tab-automation",
+    "name": "Pub Alerte",
+    "topic": "",
+    "qos": "2",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "application/json",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt-broker-config",
+    "x": 810,
+    "y": 300,
+    "wires": []
+  },
+  {
+    "id": "auto-mqtt-action-machine",
+    "type": "mqtt out",
+    "z": "tab-automation",
+    "name": "Action Arr\u00eat",
+    "topic": "",
+    "qos": "1",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "application/json",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt-broker-config",
+    "x": 820,
+    "y": 340,
+    "wires": []
+  },
+  {
+    "id": "comment-rule4",
+    "type": "comment",
+    "z": "tab-automation",
+    "name": "R\u00c8GLE 4: Atelier \u2014 Temp > 40\u00b0C \u2192 Alerte Surchauffe",
+    "info": "",
+    "x": 280,
+    "y": 390,
+    "wires": []
+  },
+  {
+    "id": "auto-switch-temp-at",
+    "type": "switch",
+    "z": "tab-automation",
+    "name": "Temp > 40\u00b0C ?",
+    "property": "payload.capteurs.temperature",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "gt",
+        "v": "40",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 1,
+    "x": 370,
+    "y": 430,
+    "wires": [
+      [
+        "auto-alert-temp-at"
+      ]
+    ]
+  },
+  {
+    "id": "auto-alert-temp-at",
+    "type": "function",
+    "z": "tab-automation",
+    "name": "Alerte Surchauffe",
+    "func": "let temp = msg.payload.capteurs.temperature;\n\nmsg.payload = {\n    type: \"ALERTE_TEMPERATURE\",\n    zone: \"atelier\",\n    niveau: temp > 45 ? \"CRITIQUE\" : \"WARNING\",\n    message: \"Surchauffe atelier : \" + temp + \" C (seuil: 40 C)\",\n    valeur: temp,\n    seuil: 40,\n    timestamp: new Date().toISOString()\n};\nmsg.topic = \"alertes/atelier/temperature\";\n\nnode.status({fill:\"red\", shape:\"dot\", text: \"Surchauffe: \" + temp + \" C\"});\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 590,
+    "y": 430,
+    "wires": [
+      [
+        "auto-mqtt-alert-4",
+        "auto-debug-alerts"
+      ]
+    ]
+  },
+  {
+    "id": "auto-mqtt-alert-4",
+    "type": "mqtt out",
+    "z": "tab-automation",
+    "name": "Pub Alerte",
+    "topic": "",
+    "qos": "2",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "application/json",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt-broker-config",
+    "x": 810,
+    "y": 430,
+    "wires": []
+  },
+  {
+    "id": "comment-rule5",
+    "type": "comment",
+    "z": "tab-automation",
+    "name": "R\u00c8GLE 5: Local \u00c9lec. \u2014 Luminosit\u00e9 < 50 lux \u2192 \u00c9clairage Auto",
+    "info": "",
+    "x": 310,
+    "y": 490,
+    "wires": []
+  },
+  {
+    "id": "auto-mqtt-le",
+    "type": "mqtt in",
+    "z": "tab-automation",
+    "name": "MQTT Local \u00c9lec.",
+    "topic": "iot/local-electrique/data",
+    "qos": "1",
+    "datatype": "json",
+    "broker": "mqtt-broker-config",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 130,
+    "y": 560,
+    "wires": [
+      [
+        "auto-switch-lux",
+        "auto-switch-temp-le"
+      ]
+    ]
+  },
+  {
+    "id": "auto-switch-lux",
+    "type": "switch",
+    "z": "tab-automation",
+    "name": "Lux < 50 ?",
+    "property": "payload.capteurs.luminosite",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "lt",
+        "v": "50",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 1,
+    "x": 360,
+    "y": 540,
+    "wires": [
+      [
+        "auto-alert-lux"
+      ]
+    ]
+  },
+  {
+    "id": "auto-alert-lux",
+    "type": "function",
+    "z": "tab-automation",
+    "name": "Alerte + \u00c9clairage",
+    "func": "let lux = msg.payload.capteurs.luminosite;\n\nlet alerte = {\n    payload: {\n        type: \"ALERTE_LUMINOSITE\",\n        zone: \"local-electrique\",\n        niveau: lux < 20 ? \"CRITIQUE\" : \"WARNING\",\n        message: \"Luminosite insuffisante local electrique : \" + lux + \" lux (seuil: 50 lux)\",\n        valeur: lux,\n        seuil: 50,\n        timestamp: new Date().toISOString()\n    },\n    topic: \"alertes/local-electrique/luminosite\"\n};\n\nlet action = {\n    payload: {\n        action: \"ACTIVER_ECLAIRAGE\",\n        zone: \"local-electrique\",\n        intensite: lux < 20 ? \"MAX\" : \"NORMAL\",\n        raison: \"Luminosite \" + lux + \" lux sous le seuil de 50 lux\",\n        timestamp: new Date().toISOString()\n    },\n    topic: \"actions/eclairage\"\n};\n\nnode.status({fill:\"yellow\", shape:\"dot\", text: \"Lux: \" + lux});\nreturn [alerte, action];",
+    "outputs": 2,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 570,
+    "y": 540,
+    "wires": [
+      [
+        "auto-mqtt-alert-5",
+        "auto-debug-alerts"
+      ],
+      [
+        "auto-mqtt-action-eclairage",
+        "auto-debug-actions"
+      ]
+    ]
+  },
+  {
+    "id": "auto-mqtt-alert-5",
+    "type": "mqtt out",
+    "z": "tab-automation",
+    "name": "Pub Alerte",
+    "topic": "",
+    "qos": "2",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "application/json",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt-broker-config",
+    "x": 810,
+    "y": 520,
+    "wires": []
+  },
+  {
+    "id": "auto-mqtt-action-eclairage",
+    "type": "mqtt out",
+    "z": "tab-automation",
+    "name": "Action \u00c9clairage",
+    "topic": "",
+    "qos": "1",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "application/json",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt-broker-config",
+    "x": 830,
+    "y": 560,
+    "wires": []
+  },
+  {
+    "id": "comment-rule6",
+    "type": "comment",
+    "z": "tab-automation",
+    "name": "R\u00c8GLE 6: Local \u00c9lec. \u2014 Temp > 35\u00b0C \u2192 Alerte Surchauffe Armoire",
+    "info": "",
+    "x": 310,
+    "y": 610,
+    "wires": []
+  },
+  {
+    "id": "auto-switch-temp-le",
+    "type": "switch",
+    "z": "tab-automation",
+    "name": "Temp > 35\u00b0C ?",
+    "property": "payload.capteurs.temperature",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "gt",
+        "v": "35",
+        "vt": "num"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 1,
+    "x": 370,
+    "y": 650,
+    "wires": [
+      [
+        "auto-alert-temp-le"
+      ]
+    ]
+  },
+  {
+    "id": "auto-alert-temp-le",
+    "type": "function",
+    "z": "tab-automation",
+    "name": "Alerte Temp Armoire",
+    "func": "let temp = msg.payload.capteurs.temperature;\n\nmsg.payload = {\n    type: \"ALERTE_TEMPERATURE\",\n    zone: \"local-electrique\",\n    niveau: temp > 40 ? \"CRITIQUE\" : \"WARNING\",\n    message: \"Temperature elevee local electrique : \" + temp + \" C (seuil: 35 C)\",\n    valeur: temp,\n    seuil: 35,\n    timestamp: new Date().toISOString()\n};\nmsg.topic = \"alertes/local-electrique/temperature\";\n\nnode.status({fill:\"red\", shape:\"dot\", text: \"Temp LE: \" + temp + \" C\"});\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 590,
+    "y": 650,
+    "wires": [
+      [
+        "auto-mqtt-alert-6",
+        "auto-debug-alerts"
+      ]
+    ]
+  },
+  {
+    "id": "auto-mqtt-alert-6",
+    "type": "mqtt out",
+    "z": "tab-automation",
+    "name": "Pub Alerte",
+    "topic": "",
+    "qos": "2",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "application/json",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt-broker-config",
+    "x": 810,
+    "y": 650,
+    "wires": []
+  },
+  {
+    "id": "auto-debug-alerts",
+    "type": "debug",
+    "z": "tab-automation",
+    "name": "ALERTES",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "payload.message",
+    "statusType": "auto",
+    "x": 1040,
+    "y": 300,
+    "wires": []
+  },
+  {
+    "id": "auto-debug-actions",
+    "type": "debug",
+    "z": "tab-automation",
+    "name": "ACTIONS",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "payload.action",
+    "statusType": "auto",
+    "x": 1040,
+    "y": 450,
+    "wires": []
+  },
+  {
+    "id": "tab-notifications",
+    "type": "tab",
+    "label": "4. Notifications",
+    "disabled": false,
+    "info": "Hub Telegram + Email"
+  },
+  {
+    "id": "notif-cmt",
+    "type": "comment",
+    "z": "tab-notifications",
+    "name": "Souscription alertes/# -> Telegram + Email",
+    "info": "",
+    "x": 260,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "notif-mqtt",
+    "type": "mqtt in",
+    "z": "tab-notifications",
+    "name": "MQTT alertes/#",
+    "topic": "alertes/#",
+    "qos": "2",
+    "datatype": "json",
+    "broker": "mqtt-broker-config",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 120,
+    "y": 140,
+    "wires": [
+      [
+        "notif-tg-fn",
+        "notif-em-fn"
+      ]
+    ]
+  },
+  {
+    "id": "notif-tg-fn",
+    "type": "function",
+    "z": "tab-notifications",
+    "name": "Format Telegram",
+    "func": "const token = env.get('TELEGRAM_BOT_TOKEN');\nconst chatId = env.get('TELEGRAM_CHAT_ID');\nif (!token || !chatId || token === 'YOUR_BOT_TOKEN' || token === '') {\n    node.status({fill:'grey',shape:'ring',text:'Telegram non configure'});\n    return null;\n}\nconst key = 'tg_' + msg.topic;\nconst now = Date.now();\nconst lastSent = context.get(key) || 0;\nif (now - lastSent < 300000) {\n    const s = Math.round((300000-(now-lastSent))/1000);\n    node.status({fill:'yellow',shape:'ring',text:'Cooldown '+s+'s'});\n    return null;\n}\ncontext.set(key, now);\nconst p = msg.payload;\nconst niveau = p.niveau || 'INFO';\nconst tag = niveau === 'CRITIQUE' ? '[CRITIQUE]' : '[WARNING]';\nconst ts = new Date().toLocaleString('fr-FR');\nconst text = tag + ' *ALERTE ' + niveau + '*\\n\\nZone : *' + (p.zone||msg.topic) + '*\\nProbleme : ' + (p.message||'Alerte') + '\\nValeur : *' + p.valeur + '* (seuil : ' + p.seuil + ')\\nHeure : ' + ts + '\\n\\n_Hackathon IoT 2026 - Equipe 01_';\nmsg.url = 'https://api.telegram.org/bot' + token + '/sendMessage';\nmsg.method = 'POST';\nmsg.payload = {chat_id:chatId, text:text, parse_mode:'Markdown'};\nmsg.headers = {'Content-Type':'application/json'};\nnode.status({fill:'blue',shape:'dot',text:'Envoye: '+niveau});\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 340,
+    "y": 100,
+    "wires": [
+      [
+        "notif-tg-http"
+      ]
+    ]
+  },
+  {
+    "id": "notif-tg-http",
+    "type": "http request",
+    "z": "tab-notifications",
+    "name": "Telegram Bot API",
+    "method": "POST",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 560,
+    "y": 100,
+    "wires": [
+      [
+        "notif-tg-dbg"
+      ]
+    ]
+  },
+  {
+    "id": "notif-tg-dbg",
+    "type": "debug",
+    "z": "tab-notifications",
+    "name": "Telegram OK",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 760,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "notif-em-fn",
+    "type": "function",
+    "z": "tab-notifications",
+    "name": "Format Email HTML",
+    "func": "const emailTo = env.get('EMAIL_TO');\nconst emailFrom = env.get('EMAIL_FROM');\nif (!emailTo || emailTo === '' || emailTo === 'votre.email@gmail.com') {\n    node.status({fill:'grey',shape:'ring',text:'Email non configure'});\n    return null;\n}\nconst key = 'em_' + msg.topic;\nconst now = Date.now();\nconst lastSent = context.get(key) || 0;\nif (now - lastSent < 600000) {\n    node.status({fill:'yellow',shape:'ring',text:'Cooldown email'});\n    return null;\n}\ncontext.set(key, now);\nconst p = msg.payload;\nconst niveau = p.niveau || 'INFO';\nconst color = niveau === 'CRITIQUE' ? '#F43F5E' : '#F59E0B';\nconst ts = new Date().toLocaleString('fr-FR');\nmsg.to = emailTo;\nmsg.from = emailFrom || emailTo;\nmsg.subject = '[IoT ALERTE ' + niveau + '] ' + (p.zone||msg.topic).toUpperCase();\nmsg.payload = '<html><body style=\"font-family:Arial,sans-serif;background:#0B1929;color:#E2E8F0;padding:24px\"><div style=\"max-width:600px;margin:auto;background:#122A45;border-radius:12px;padding:24px;border-left:5px solid '+color+'\"><h2 style=\"color:'+color+';margin-top:0\">ALERTE '+niveau+'</h2><p><b>Zone :</b> '+(p.zone||msg.topic)+'</p><p><b>Probleme :</b> '+(p.message||'Alerte detectee')+'</p><p><b>Valeur :</b> <span style=\"font-size:1.4em;color:'+color+'\">'+p.valeur+'</span></p><p><b>Seuil :</b> '+p.seuil+'</p><p><b>Heure :</b> '+ts+'</p><hr style=\"border-color:#1E3A5F\"><p style=\"color:#94A3B8;font-size:0.8em\">Hackathon IoT 2026 - Equipe 01 - Satom IT Learning Solutions</p></div></body></html>';\nmsg.contentType = 'text/html';\nnode.status({fill:'blue',shape:'dot',text:'Email: '+niveau});\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 340,
+    "y": 200,
+    "wires": [
+      [
+        "notif-em-out"
+      ]
+    ]
+  },
+  {
+    "id": "notif-em-out",
+    "type": "e-mail",
+    "z": "tab-notifications",
+    "server": "smtp.gmail.com",
+    "port": "587",
+    "secure": false,
+    "starttls": true,
+    "name": "",
+    "dname": "Gmail SMTP",
+    "x": 560,
+    "y": 200,
+    "wires": [
+      [
+        "notif-em-dbg"
+      ]
+    ]
+  },
+  {
+    "id": "notif-em-dbg",
+    "type": "debug",
+    "z": "tab-notifications",
+    "name": "Email Statut",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 760,
+    "y": 200,
+    "wires": []
+  }
+]
